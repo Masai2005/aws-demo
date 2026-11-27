@@ -1,6 +1,6 @@
 # Likes app
 
-A tiny posts app with likes and comments. TypeScript everywhere, React UI, Bun server, SQLite (`bun:sqlite`).
+A tiny posts app with likes and comments. TypeScript everywhere, React UI with shadcn/ui and Tailwind, Bun server, SQLite (`bun:sqlite`).
 
 ```bash
 bun install
@@ -35,4 +35,7 @@ Everything except login needs the session cookie. Errors come back as `{ "error"
 - `src/api.ts` – the 10 endpoints
 - `src/db.ts` – tables and seed data
 - `src/shared/types.ts` – types used by both server and client
-- `src/client/` – React app (`App.tsx`, `api.ts`, `styles.css`)
+- `src/client/` – React app (`App.tsx`, `api.ts`)
+- `src/client/components/ui/` – shadcn/ui primitives (Button, Card, Input, Textarea, Label, Avatar, Separator)
+- `src/client/styles.css` – Tailwind v4 and the shadcn colour tokens (light and dark follow the system)
+- `bunfig.toml` – turns on Bun's Tailwind plugin for the HTML bundler
