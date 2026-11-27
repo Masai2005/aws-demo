@@ -24,8 +24,8 @@ Data lives in `data.sqlite`; delete it to reset to the seed data.
 | 6 | DELETE | `/api/posts/:id` | Delete your own post (and its likes and comments) |
 | 7 | POST | `/api/posts/:id/like` | Like or unlike (toggle); returns the updated post |
 | 8 | GET | `/api/posts/:id/comments` | A post's comments, oldest first |
-| 9 | POST | `/api/posts/:id/comments` | Add a comment (`{ body }`) |
-| 10 | DELETE | `/api/comments/:id` | Delete your own comment |
+| 9 | POST | `/api/posts/:id/comments` | Add a comment (`{ body }`), or reply to one (`{ body, parentId }`). Replies are one level deep |
+| 10 | DELETE | `/api/comments/:id` | Delete your own comment (and its replies) |
 
 Everything except login needs the session cookie. Errors come back as `{ "error": "..." }`.
 

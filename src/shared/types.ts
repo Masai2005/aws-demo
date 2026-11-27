@@ -15,6 +15,7 @@ export type Post = {
 export type Comment = {
   id: number;
   postId: number;
+  parentId: number | null; // set when this comment is a reply
   author: User;
   body: string;
   createdAt: string; // ISO 8601, UTC

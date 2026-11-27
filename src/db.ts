@@ -30,13 +30,24 @@ export function openDb(file: string): Database {
       id INTEGER PRIMARY KEY,
       post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE,
       body TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
   `);
+  addParentColumn(db);
   seed(db);
   return db;
+}
+
+// Databases created before replies existed lack comments.parent_id.
+function addParentColumn(db: Database) {
+  const cols = db.query<{ name: string }, []>("PRAGMA table_info(comments)").all();
+  if (!cols.some((c) => c.name === "parent_id")) {
+    db.exec("ALTER TABLE comments ADD COLUMN parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id)");
 }
 
 function seed(db: Database) {

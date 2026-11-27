@@ -26,7 +26,8 @@ export const api = {
   deletePost: (id: number) => request<Ok>(`/api/posts/${id}`, "DELETE"),
   toggleLike: (id: number) => request<Post>(`/api/posts/${id}/like`, "POST"),
   listComments: (postId: number) => request<Comment[]>(`/api/posts/${postId}/comments`),
-  addComment: (postId: number, body: string) => request<Comment>(`/api/posts/${postId}/comments`, "POST", { body }),
+  addComment: (postId: number, body: string, parentId?: number) =>
+    request<Comment>(`/api/posts/${postId}/comments`, "POST", { body, parentId }),
   deleteComment: (id: number) => request<Ok>(`/api/comments/${id}`, "DELETE"),
 };
 

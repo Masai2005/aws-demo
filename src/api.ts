@@ -32,7 +32,7 @@ type PostRow = {
   id: number; body: string; created_at: string; author_id: number; author_name: string;
   like_count: number; liked_by_me: number; comment_count: number;
 };
-type CommentRow = { id: number; post_id: number; body: string; created_at: string; author_id: number; author_name: string };
+type CommentRow = { id: number; post_id: number; parent_id: number | null; body: string; created_at: string; author_id: number; author_name: string };
 
 const toPost = (r: PostRow): Post => ({
   id: r.id,
@@ -46,6 +46,7 @@ const toPost = (r: PostRow): Post => ({
 const toComment = (r: CommentRow): Comment => ({
   id: r.id,
   postId: r.post_id,
+  parentId: r.parent_id,
   author: { id: r.author_id, username: r.author_name },
   body: r.body,
   createdAt: r.created_at,
@@ -58,7 +59,7 @@ const POST_SELECT = `
     (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
   FROM posts p JOIN users u ON u.id = p.user_id`;
 const COMMENT_SELECT = `
-  SELECT c.id, c.post_id, c.body, c.created_at, u.id AS author_id, u.username AS author_name
+  SELECT c.id, c.post_id, c.parent_id, c.body, c.created_at, u.id AS author_id, u.username AS author_name
   FROM comments c JOIN users u ON u.id = c.user_id`;
 
 export function apiRoutes(db: Database) {
@@ -82,8 +83,10 @@ export function apiRoutes(db: Database) {
     like: db.query("INSERT INTO likes (post_id, user_id) VALUES (?, ?)"),
     comments: db.query<CommentRow, [number]>(`${COMMENT_SELECT} WHERE c.post_id = ? ORDER BY c.created_at, c.id`),
     comment: db.query<CommentRow, [number]>(`${COMMENT_SELECT} WHERE c.id = ?`),
-    addComment: db.query<{ id: number }, [number, number, string, string]>(
-      "INSERT INTO comments (post_id, user_id, body, created_at) VALUES (?, ?, ?, ?) RETURNING id"),
+    addComment: db.query<{ id: number }, [number, number, number | null, string, string]>(
+      "INSERT INTO comments (post_id, user_id, parent_id, body, created_at) VALUES (?, ?, ?, ?, ?) RETURNING id"),
+    commentParent: db.query<{ post_id: number; parent_id: number | null }, [number]>(
+      "SELECT post_id, parent_id FROM comments WHERE id = ?"),
     commentOwner: db.query<{ user_id: number }, [number]>("SELECT user_id FROM comments WHERE id = ?"),
     dropComment: db.query("DELETE FROM comments WHERE id = ?"),
   };
@@ -184,13 +187,23 @@ export function apiRoutes(db: Database) {
         if (!id || !q.postOwner.get(id)) return fail(404, "Post not found");
         return Response.json(q.comments.all(id).map(toComment));
       }),
-      // 9. Comment on a post
+      // 9. Comment on a post, or reply to a comment with { parentId }
       POST: authed<"/api/posts/:id/comments">(async (req, me) => {
         const id = parseId(req.params.id);
         if (!id || !q.postOwner.get(id)) return fail(404, "Post not found");
-        const text = cleanText((await readJson(req)).body);
+        const input = await readJson(req);
+        const text = cleanText(input.body);
         if (!text) return fail(400, `Write between 1 and ${MAX_TEXT_LENGTH} characters`);
-        const row = q.addComment.get(id, me.id, text, new Date().toISOString());
+
+        let parentId: number | null = null;
+        if (input.parentId !== undefined && input.parentId !== null) {
+          const parent = typeof input.parentId === "number" ? q.commentParent.get(input.parentId) : null;
+          if (!parent || parent.post_id !== id) return fail(400, "That comment is not on this post");
+          // Replies stay one level deep: replying to a reply joins the same thread.
+          parentId = parent.parent_id ?? (input.parentId as number);
+        }
+
+        const row = q.addComment.get(id, me.id, parentId, text, new Date().toISOString());
         const comment = row && q.comment.get(row.id);
         return comment ? Response.json(toComment(comment), { status: 201 }) : fail(500, "Could not save the comment");
       }),

@@ -177,64 +177,102 @@ function Comments({ postId, me, onCountChange }: {
   postId: number; me: User; onCountChange: (delta: number) => void;
 }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
-  const [draft, setDraft] = useState("");
+  const [replyTo, setReplyTo] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     api.listComments(postId).then(setComments, (e) => { setComments([]); setError(errorText(e)); });
   }, [postId]);
 
-  async function add(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true);
+  async function add(body: string, parentId?: number) {
     setError("");
     try {
-      const c = await api.addComment(postId, draft);
+      const c = await api.addComment(postId, body, parentId);
       setComments((list) => [...(list ?? []), c]);
-      setDraft("");
       onCountChange(1);
+      setReplyTo(null);
+      return true;
     } catch (err) {
       setError(errorText(err));
-    } finally {
-      setBusy(false);
+      return false;
     }
   }
 
   async function remove(id: number) {
     try {
       await api.deleteComment(id);
-      setComments((list) => list?.filter((c) => c.id !== id) ?? list);
-      onCountChange(-1);
+      // The server also deletes the comment's replies.
+      const gone = (comments ?? []).filter((c) => c.id === id || c.parentId === id).length;
+      setComments((list) => list?.filter((c) => c.id !== id && c.parentId !== id) ?? list);
+      onCountChange(-gone);
     } catch (err) {
       setError(errorText(err));
     }
   }
 
+  const topLevel = comments?.filter((c) => c.parentId === null) ?? [];
+  const repliesTo = (id: number) => comments?.filter((c) => c.parentId === id) ?? [];
+
+  const line = (c: Comment, threadId: number) => (
+    <div key={c.id} className="comment">
+      <p>
+        <strong>{c.author.username}</strong> {c.body}
+      </p>
+      <span className="muted small">
+        {formatTime(c.createdAt)} · <button type="button" className="link" onClick={() => setReplyTo(threadId)}>Reply</button>
+        {c.author.id === me.id && (
+          <> · <button type="button" className="link danger" onClick={() => remove(c.id)}>Delete</button></>
+        )}
+      </span>
+    </div>
+  );
+
   return (
     <section className="comments">
       {comments === null && <p className="muted small">Loading…</p>}
       {comments?.length === 0 && <p className="muted small">No comments yet.</p>}
-      {comments?.map((c) => (
-        <div key={c.id} className="comment">
-          <p>
-            <strong>{c.author.username}</strong> {c.body}
-          </p>
-          <span className="muted small">
-            {formatTime(c.createdAt)}
-            {c.author.id === me.id && (
-              <> · <button type="button" className="link danger" onClick={() => remove(c.id)}>Delete</button></>
-            )}
-          </span>
+      {topLevel.map((c) => (
+        <div key={c.id} className="thread">
+          {line(c, c.id)}
+          {(repliesTo(c.id).length > 0 || replyTo === c.id) && (
+            <div className="replies">
+              {repliesTo(c.id).map((r) => line(r, c.id))}
+              {replyTo === c.id && (
+                <CommentForm id={`reply-${c.id}`} label={`Reply to ${c.author.username}`} autoFocus
+                  onSubmit={(body) => add(body, c.id)} onCancel={() => setReplyTo(null)} />
+              )}
+            </div>
+          )}
         </div>
       ))}
-      <form onSubmit={add} className="row">
-        <label className="sr-only" htmlFor={`comment-${postId}`}>Write a comment</label>
-        <input id={`comment-${postId}`} value={draft} onChange={(e) => setDraft(e.target.value)}
-          placeholder="Write a comment" maxLength={MAX_TEXT_LENGTH} />
-        <button type="submit" disabled={busy || !draft.trim()}>Send</button>
-      </form>
+      <CommentForm id={`comment-${postId}`} label="Write a comment" onSubmit={(body) => add(body)} />
       {error && <p className="error" role="alert">{error}</p>}
     </section>
+  );
+}
+
+function CommentForm({ id, label, autoFocus, onSubmit, onCancel }: {
+  id: string; label: string; autoFocus?: boolean;
+  onSubmit: (body: string) => Promise<boolean>; onCancel?: () => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    if (await onSubmit(draft)) setDraft("");
+    setBusy(false);
+  }
+
+  return (
+    <form onSubmit={submit} className="row">
+      <label className="sr-only" htmlFor={id}>{label}</label>
+      <input id={id} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={label}
+        maxLength={MAX_TEXT_LENGTH} autoFocus={autoFocus}
+        onKeyDown={(e) => { if (e.key === "Escape") onCancel?.(); }} />
+      {onCancel && <button type="button" onClick={onCancel}>Cancel</button>}
+      <button type="submit" disabled={busy || !draft.trim()}>Send</button>
+    </form>
   );
 }

@@ -50,6 +50,8 @@ p { margin: 0; }
 
 .comments { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); display: grid; gap: 12px; }
 .comment p { overflow-wrap: anywhere; }
+.thread { display: grid; gap: 8px; }
+.replies { display: grid; gap: 8px; margin-left: 12px; padding-left: 12px; border-left: 2px solid var(--line); }
 
 label { display: grid; gap: 4px; font-size: 0.9rem; color: var(--muted); }
 input, textarea {

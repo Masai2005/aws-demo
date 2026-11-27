@@ -86,6 +86,32 @@ describe("posts, likes and comments", () => {
     expect(list).toEqual([]);
   });
 
+  test("replies to a comment, one level deep", async () => {
+    const add = (body: unknown) => call(`/api/posts/${mine.id}/comments`, "POST", body);
+    const top = (await (await add({ body: "top" })).json()) as Comment;
+    expect(top.parentId).toBeNull();
+
+    const reply = (await (await add({ body: "reply", parentId: top.id })).json()) as Comment;
+    expect(reply.parentId).toBe(top.id);
+    const nested = (await (await add({ body: "reply to reply", parentId: reply.id })).json()) as Comment;
+    expect(nested.parentId).toBe(top.id);
+
+    expect((await add({ body: "x", parentId: 99999 })).status).toBe(400);
+    expect((await add({ body: "x", parentId: "1" })).status).toBe(400);
+    const posts = (await (await call("/api/posts")).json()) as Post[];
+    const samsPost = posts.find((p) => p.author.username === "sam");
+    const otherComment = (await (await call(`/api/posts/${samsPost?.id}/comments`)).json()) as Comment[];
+    expect(otherComment.length).toBeGreaterThan(0);
+    expect((await add({ body: "x", parentId: otherComment[0]?.id })).status).toBe(400);
+
+    expect(posts.find((p) => p.id === mine.id)?.commentCount).toBe(3);
+
+    // Deleting the top comment removes its replies too.
+    expect((await call(`/api/comments/${top.id}`, "DELETE")).status).toBe(200);
+    const left = (await (await call(`/api/posts/${mine.id}/comments`)).json()) as Comment[];
+    expect(left).toEqual([]);
+  });
+
   test("will not delete someone else's post or comment", async () => {
     const posts = (await (await call("/api/posts")).json()) as Post[];
     const sams = posts.find((p) => p.author.username === "sam");
