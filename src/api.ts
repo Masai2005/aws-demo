@@ -123,7 +123,7 @@ export function apiRoutes(db: Database) {
         q.addSession.run(token, row.id, new Date().toISOString());
         req.cookies.set(SESSION_COOKIE, token, {
           httpOnly: true, sameSite: "lax", path: "/", maxAge: SESSION_MAX_AGE_SECONDS,
-          secure: process.env.NODE_ENV === "production",
+          secure: process.env.COOKIE_SECURE === "true",
         });
         return Response.json({ id: row.id, username: row.username } satisfies User);
       },
